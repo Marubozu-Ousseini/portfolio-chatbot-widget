@@ -2,7 +2,7 @@
 (function () {
   if (window.__CHATBOT_WIDGET_LOADED) return;
   window.__CHATBOT_WIDGET_LOADED = true;
-  const api = window.CHATBOT_API || '';
+  const api = window.CHATBOT_API || 'https://fv3yej7f2j.execute-api.us-east-1.amazonaws.com/prod/chat';
   const style = document.createElement('link');
   style.rel = 'stylesheet';
   style.href = 'chatbot-widget.css';
@@ -13,7 +13,7 @@
   document.body.appendChild(btn);
   const container = document.createElement('div');
   container.id = 'chatbot-container';
-  container.innerHTML = `<div id="chatbot-header">AI Chatbot <span id="chatbot-close">×</span></div><div id="chatbot-messages"></div><form id="chatbot-form"><input id="chatbot-input" autocomplete="off" placeholder="Ask me anything..."/><button>Send</button></form>`;
+  container.innerHTML = `<div id="chatbot-header">Sensei <span id="chatbot-close">×</span></div><div id="chatbot-messages"></div><form id="chatbot-form"><input id="chatbot-input" autocomplete="off" placeholder="Ask me anything..."/><button>Send</button></form>`;
   document.body.appendChild(container);
   btn.onclick = () => container.classList.toggle('open');
   document.getElementById('chatbot-close').onclick = () => container.classList.remove('open');
