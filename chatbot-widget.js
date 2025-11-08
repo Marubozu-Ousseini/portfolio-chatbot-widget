@@ -1,59 +1,25 @@
-// chatbot-widget.js - Standalone JavaScript (clean robust version)
+// chatbot-widget.js - Standalone JavaScript (no edit-name button)
 (function () {
   try {
-    // Avoid duplicate initialization
-    if (document.getElementById('chatbot-btn')) {
-      console.log('Chatbot widget already present.');
-      return;
-    }
+    if (document.getElementById('chatbot-btn')) return;
 
-    // Resolve API lazily to allow env-loader + late assignment
-    const resolveApi = () => {
-      return (
-        window.CHATBOT_API ||
-        (typeof window.getEnv === 'function' ? window.getEnv('CHATBOT_API') : '') ||
-        ''
-      );
-    };
-    // Warn if loaded from file:// which breaks fetch and CORS
-    if (window.location.protocol === 'file:') {
-      console.warn('[chatbot] Running from file://. Start a local server (e.g., http://localhost:8000) so .env loads and CORS works.');
-    }
+    const resolveApi = () => (
+      window.CHATBOT_API || (typeof window.getEnv === 'function' ? window.getEnv('CHATBOT_API') : '') || ''
+    );
 
-    // Ensure CSS is loaded (only once)
-    if (!document.querySelector('link[href*="widget/chatbot-widget.css"]')) {
+    if (!document.querySelector('link[href$="chatbot-widget.css"]')) {
       const style = document.createElement('link');
       style.rel = 'stylesheet';
-      style.href = 'widget/chatbot-widget.css';
+      style.href = 'chatbot-widget.css';
       document.head.appendChild(style);
     }
 
-    // Floating button with inline fallback styles
     const btn = document.createElement('button');
     btn.id = 'chatbot-btn';
     btn.innerHTML = '💬';
     btn.setAttribute('aria-label', 'Open chat');
-    btn.style.cssText = [
-      'position: fixed !important',
-      'bottom: 20px !important',
-      'right: 20px !important',
-      'width: 60px !important',
-      'height: 60px !important',
-      'border-radius: 50% !important',
-      'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important',
-      'color: #fff !important',
-      'border: none !important',
-      'font-size: 24px !important',
-      'cursor: pointer !important',
-      'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important',
-      'z-index: 9999 !important',
-      'display: flex !important',
-      'align-items: center !important',
-      'justify-content: center !important'
-    ].join('; ');
     document.body.appendChild(btn);
 
-    // Container
     const container = document.createElement('div');
     container.id = 'chatbot-container';
     container.innerHTML = [
@@ -73,24 +39,78 @@
     ].join('');
     document.body.appendChild(container);
 
-    // Elements
     const form = document.getElementById('chatbot-form');
     const input = document.getElementById('chatbot-input');
-  const messages = document.getElementById('chatbot-messages');
-  const faqPanel = document.getElementById('chatbot-faq');
-  const faqToggle = document.getElementById('chatbot-faq-toggle');
+    const messages = document.getElementById('chatbot-messages');
+    const faqPanel = document.getElementById('chatbot-faq');
+    const faqToggle = document.getElementById('chatbot-faq-toggle');
     const closeBtn = document.getElementById('chatbot-close');
 
     let welcomeShown = false;
+    let userName = localStorage.getItem('chatbot_user_name') || '';
+    const STORAGE_KEY = 'chatbot_history_v1';
+
+    function loadHistory() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (_) { return []; }
+    }
+    function saveHistory(list) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(-100)));
+      } catch (_) {}
+    }
+    function appendHistory(from, text) {
+      const list = loadHistory();
+      list.push({ from, text: String(text || '') });
+      saveHistory(list);
+    }
+
+    const detectUiLanguage = () => {
+      const lang = (document.documentElement.lang || navigator.language || 'en').toLowerCase();
+      return lang.startsWith('fr') ? 'fr' : 'en';
+    };
+    const t = (key, lang) => {
+      const fr = {
+        welcome: "Bienvenue ! 👨🏾‍🏫 Je suis Sensei.🤖 Posez-moi vos questions sur les expériences, projets ou compétences d'Ousseini !",
+        askName: "Avant de commencer, comment vous appelez-vous ?",
+        thanksName: (n) => `Ravi de vous rencontrer, ${n} !`,
+        placeholder: "Posez-moi une question...",
+        send: "Envoyer"
+      };
+      const en = {
+        welcome: "Welcome! 👨🏾‍🏫 I'm Sensei.🤖 Ask me anything about Ousseini's experiences, projects, or skills!",
+        askName: "Before we start, what's your name?",
+        thanksName: (n) => `Nice to meet you, ${n}!`,
+        placeholder: "Ask me anything...",
+        send: "Send"
+      };
+      const dict = lang === 'fr' ? fr : en;
+      return dict[key];
+    };
 
     function addWelcomeMessage() {
       if (welcomeShown) return;
+      const lang = detectUiLanguage();
       const msgDiv = document.createElement('div');
       msgDiv.className = 'msg bot';
-      msgDiv.innerHTML = "Welcome! 👨🏾‍🏫 I'm Sensei.🤖 Ask me anything about Ousseini's experiences, projects, or skills!";
+      // Neutral welcome; no unsolicited mention of experiences/projects/skills
+      const welcome = lang === 'fr'
+        ? "Bienvenue ! 👨🏾‍🏫 Je suis Sensei.🤖 Posez-moi vos questions !"
+        : "Welcome! 👨🏾‍🏫 I'm Sensei.🤖 Ask me anything!";
+      msgDiv.innerHTML = welcome;
       messages.appendChild(msgDiv);
       messages.scrollTop = messages.scrollHeight;
       welcomeShown = true;
+      if (!userName) {
+        const nameAsk = document.createElement('div');
+        nameAsk.className = 'msg bot';
+        nameAsk.textContent = t('askName', lang);
+        messages.appendChild(nameAsk);
+        messages.scrollTop = messages.scrollHeight;
+      }
     }
 
     btn.addEventListener('click', () => {
@@ -98,20 +118,29 @@
       container.classList.toggle('open');
       if (!wasOpen && !welcomeShown) addWelcomeMessage();
     });
+    closeBtn && closeBtn.addEventListener('click', () => container.classList.remove('open'));
 
-    closeBtn && closeBtn.addEventListener('click', () => {
-      container.classList.remove('open');
-    });
-
-    function addMsg(text, from) {
+    function addMsg(text, from, persist = true) {
       const div = document.createElement('div');
       div.className = 'msg ' + from;
       div.textContent = text;
       messages.appendChild(div);
       messages.scrollTop = messages.scrollHeight;
+      if (persist) appendHistory(from, text);
     }
 
-    // Resolve FAQs from config with safe defaults
+    // Restore history if present
+    (function restoreHistory() {
+      const hist = loadHistory();
+      if (hist.length) {
+        for (const m of hist) {
+          if (!m || !m.text) continue;
+          addMsg(m.text, m.from === 'user' ? 'user' : 'bot', false);
+        }
+        welcomeShown = true; // avoid re-showing welcome
+      }
+    })();
+
     const resolveFaqs = () => {
       const fromGlobal = (window.PortfolioChatbotConfig && Array.isArray(window.PortfolioChatbotConfig.faqs))
         ? window.PortfolioChatbotConfig.faqs
@@ -139,17 +168,15 @@
       }
       const html = [
         '<div class="faq-list" role="list">',
-        ...faqs.map(q => `<button type="button" class="faq-item" role="listitem" data-q="${q.replace(/\"/g, '&quot;')}">❓ ${q}</button>`),
+        ...faqs.map(q => `<button type=\"button\" class=\"faq-item\" role=\"listitem\" data-q=\"${q.replace(/\\\"/g, '&quot;')}\">❓ ${q}</button>`),
         '</div>'
       ].join('');
       faqPanel.innerHTML = html;
-      // Wire clicks
       faqPanel.querySelectorAll('.faq-item').forEach(btn => {
         btn.addEventListener('click', () => {
           const q = btn.getAttribute('data-q') || '';
           if (!q) return;
           sendMessage(q);
-          // Close FAQ after sending
           faqPanel.classList.add('hidden');
         });
       });
@@ -164,10 +191,26 @@
         faqPanel.classList.add('hidden');
       }
     }
-
     faqToggle && faqToggle.addEventListener('click', toggleFaq);
 
     async function sendMessage(q) {
+      const lang = detectUiLanguage();
+      if (!userName) {
+        const cand = q.trim();
+        if (cand && cand.split(/\s+/).length <= 4 && !/[?!.]/.test(cand)) {
+          const cleaned = cand.replace(/[^\p{L} '\\-]/gu, '').trim();
+          if (cleaned) {
+            userName = cleaned;
+            try { localStorage.setItem('chatbot_user_name', userName); } catch (e) {}
+            const ack = document.createElement('div');
+            ack.className = 'msg bot';
+            ack.textContent = (t('thanksName', lang))(userName);
+            messages.appendChild(ack);
+            messages.scrollTop = messages.scrollHeight;
+            return;
+          }
+        }
+      }
       addMsg(q, 'user');
       input.value = '';
       const loadingMsg = document.createElement('div');
@@ -184,21 +227,13 @@
         const res = await fetch(api, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: q })
+          body: JSON.stringify({ message: q, name: userName || undefined })
         });
         const data = await res.json();
-        loadingMsg.textContent = (data.message || '').replace(/\r\n/g, '\n');
-        if (data.sources && data.sources.length > 0) {
-          const src = document.createElement('div');
-          src.className = 'sources';
-          const labels = data.sources.map(s => {
-            if (typeof s === 'string') return s;
-            return s?.title || s?.name || '';
-          }).filter(Boolean);
-          src.textContent = 'Sources: ' + labels.join(', ');
-          messages.appendChild(src);
-          messages.scrollTop = messages.scrollHeight;
-        }
+        const msg = (data.message || '').replace(/\r\n/g, '\n');
+        loadingMsg.textContent = msg;
+        appendHistory('bot', msg);
+        // Sources are intentionally not displayed in the chat UI.
       } catch (err) {
         loadingMsg.textContent = 'Error: ' + err.message;
       }
@@ -208,9 +243,15 @@
       e.preventDefault();
       const q = input.value.trim();
       if (!q) return;
-      // Delegate to shared sender
       await sendMessage(q);
     });
+
+    (function localizeControls() {
+      const lang = detectUiLanguage();
+      if (input) input.placeholder = t('placeholder', lang);
+      const submitBtn = form && form.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.textContent = t('send', lang);
+    })();
 
     console.log('Chatbot widget initialized');
   } catch (err) {
